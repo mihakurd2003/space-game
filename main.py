@@ -38,13 +38,20 @@ def read_controls(canvas):
 
 async def blink(canvas, row, column, symbol='*'):
     while True:
-        attributes = [
-            curses.A_DIM, curses.A_NORMAL, curses.A_BOLD,
-            curses.A_DIM, curses.A_NORMAL, curses.A_BOLD,
-        ]
-        for attribute in attributes:
-            canvas.addstr(row, column, symbol, attribute)
-            time.sleep(0.01)
+        canvas.addstr(row, column, symbol, curses.A_DIM)
+        for call_num in range(random.randint(15, 20)):
+            await asyncio.sleep(0)
+
+        canvas.addstr(row, column, symbol, curses.A_NORMAL)
+        for call_num in range(random.randint(1, 5)):
+            await asyncio.sleep(0)
+
+        canvas.addstr(row, column, symbol, curses.A_BOLD)
+        for call_num in range(random.randint(1, 5)):
+            await asyncio.sleep(0)
+
+        canvas.addstr(row, column, symbol, curses.A_NORMAL)
+        for call_num in range(random.randint(1, 5)):
             await asyncio.sleep(0)
 
 
@@ -119,20 +126,10 @@ def draw_frame(canvas, start_row, start_column, text, negative=False):
 async def animate_spaceship(canvas, row, column, row_max, column_max, frames):
     for frame in cycle(frames):
         row_frame_size, column_frame_size = get_frame_size(frame)
-        spaceship_border = {
-            'left_border': column,
-            'right_border': column + column_frame_size,
-            'upper_border': row,
-            'lower_border': row + row_frame_size,
-        }
-
         row_moving, column_moving = read_controls(canvas)
 
-        if spaceship_border['left_border'] + column_moving >= 0 and spaceship_border['right_border'] + column_moving <= column_max:
-            column += column_moving
-
-        if spaceship_border['upper_border'] + row_moving >= 0 and spaceship_border['lower_border'] + row_moving <= row_max:
-            row += row_moving
+        row = max(min(row + row_moving, row_max - row_frame_size), 0)
+        column = max(min(column + column_moving, column_max - column_frame_size), 0)
 
         draw_frame(canvas, row, column, frame)
 
@@ -143,19 +140,20 @@ async def animate_spaceship(canvas, row, column, row_max, column_max, frames):
 
 def draw(canvas):
     screen = curses.initscr()
-    row_max, column_max = screen.getmaxyx()
+    screen_row_max, screen_column_max = screen.getmaxyx()
     screen.nodelay(True)
     curses.curs_set(0)
     canvas.border()
 
     coroutines = []
-    for num in range(60):
+    max_visible_row, max_visible_column = (screen_row_max - 2, screen_column_max - 2)
+    for num in range(80):
         coroutines.append(
             blink(
                 canvas,
-                random.randint(1, row_max - 2),
-                random.randint(1, column_max - 2),
-                random.choice('+*.:'),
+                random.randint(1, max_visible_row),
+                random.randint(1, max_visible_column),
+                random.choice('+*.\''),
             )
         )
 
@@ -163,27 +161,22 @@ def draw(canvas):
         frame_1 = file.read()
     with open('frames/rocket_frame_2.txt', 'r', encoding='UTF-8') as file:
         frame_2 = file.read()
-    frames = [frame_1, frame_2]
+    frames = [frame_1, frame_1, frame_2, frame_2]
 
-    row_fire, column_fire = 8, 80
-    fire_coroutine = fire(canvas, row_fire, column_fire)
+    center_row_fire, center_column_fire = 10, 80
+    coroutines.append(fire(canvas, center_row_fire, center_column_fire))
 
-    row_ship, column_ship = 5, 80
-    spaceship_coroutine = animate_spaceship(canvas, row_ship, column_ship, row_max, column_max, frames)
+    center_row_ship, center_column_ship = 4, 80
+    coroutines.append(animate_spaceship(canvas, center_row_ship, center_column_ship, max_visible_row, max_visible_column, frames))
 
     while True:
-        for coroutine in coroutines:
-            coroutine.send(None)
-            canvas.refresh()
-
         try:
-            fire_coroutine.send(None)
+            for coroutine in coroutines:
+                coroutine.send(None)
             canvas.refresh()
+            time.sleep(0.1)
         except StopIteration:
             break
-
-        spaceship_coroutine.send(None)
-        canvas.refresh()
 
 
 def main():
