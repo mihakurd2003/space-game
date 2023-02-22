@@ -9,6 +9,11 @@ RIGHT_KEY_CODE = 454
 UP_KEY_CODE = 450
 DOWN_KEY_CODE = 456
 
+CENTER_ROW_FIRE, CENTER_COLUMN_FIRE = 10, 80
+CENTER_ROW_SHIP, CENTER_COLUMN_SHIP = 4, 80
+
+SCREEN_LIMIT = 2
+
 
 def read_controls(canvas):
     """Read keys pressed and returns tuple with controls state."""
@@ -36,22 +41,22 @@ def read_controls(canvas):
     return rows_direction, columns_direction
 
 
-async def blink(canvas, row, column, symbol='*'):
+async def blink(canvas, row, column, offset_tics, symbol='*'):
     while True:
         canvas.addstr(row, column, symbol, curses.A_DIM)
-        for call_num in range(random.randint(15, 20)):
+        for call_num in range(offset_tics):
             await asyncio.sleep(0)
 
         canvas.addstr(row, column, symbol, curses.A_NORMAL)
-        for call_num in range(random.randint(1, 5)):
+        for call_num in range(3):
             await asyncio.sleep(0)
 
         canvas.addstr(row, column, symbol, curses.A_BOLD)
-        for call_num in range(random.randint(1, 5)):
+        for call_num in range(5):
             await asyncio.sleep(0)
 
         canvas.addstr(row, column, symbol, curses.A_NORMAL)
-        for call_num in range(random.randint(1, 5)):
+        for call_num in range(5):
             await asyncio.sleep(0)
 
 
@@ -146,13 +151,15 @@ def draw(canvas):
     canvas.border()
 
     coroutines = []
-    max_visible_row, max_visible_column = (screen_row_max - 2, screen_column_max - 2)
+    max_visible_row, max_visible_column = (screen_row_max - SCREEN_LIMIT, screen_column_max - SCREEN_LIMIT)
     for num in range(80):
+        offset_tics = random.randint(10, 20)
         coroutines.append(
             blink(
                 canvas,
                 random.randint(1, max_visible_row),
                 random.randint(1, max_visible_column),
+                offset_tics,
                 random.choice('+*.\''),
             )
         )
@@ -163,20 +170,18 @@ def draw(canvas):
         frame_2 = file.read()
     frames = [frame_1, frame_1, frame_2, frame_2]
 
-    center_row_fire, center_column_fire = 10, 80
-    coroutines.append(fire(canvas, center_row_fire, center_column_fire))
-
-    center_row_ship, center_column_ship = 4, 80
-    coroutines.append(animate_spaceship(canvas, center_row_ship, center_column_ship, max_visible_row, max_visible_column, frames))
+    coroutines.append(fire(canvas, CENTER_ROW_FIRE, CENTER_COLUMN_FIRE))
+    coroutines.append(animate_spaceship(canvas, CENTER_ROW_SHIP, CENTER_COLUMN_SHIP, max_visible_row, max_visible_column, frames))
 
     while True:
-        try:
-            for coroutine in coroutines:
+        for coroutine in coroutines.copy():
+            try:
                 coroutine.send(None)
-            canvas.refresh()
-            time.sleep(0.1)
-        except StopIteration:
-            break
+            except StopIteration:
+                coroutines.remove(coroutine)
+
+        canvas.refresh()
+        time.sleep(0.1)
 
 
 def main():
